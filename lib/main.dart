@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 // Importando seus novos arquivos (ajuste o caminho se necessário)
 import 'screens/setup_screen.dart';
+import 'screens/login_screen.dart';
 import 'services/security_service.dart';
 
 void main() async {
@@ -11,11 +12,31 @@ void main() async {
 
   // 2. Inicializa o Hive
   await Hive.initFlutter();
-  await Hive.openBox('passwords');
 
-  // 3. Lógica de Segurança
   final security = SecurityService();
   bool isFirst = await security.isFirstAccess();
+
+  // Só tentamos abrir a box com chave se NÃO for o primeiro acesso
+  if (!isFirst) {
+    final encryptionKey = await security.generateEncryptionKey();
+
+    // Abrimos a box usando a chave gerada!
+    // Agora o Hive salva tudo criptografado automaticamente no disco.
+    await Hive.openBox(
+      'passwords',
+      encryptionCipher: HiveAesCipher(encryptionKey),
+    );
+  } else {
+    // Se for o primeiro acesso, abrimos sem chave apenas para não dar erro,
+    // ou deixamos para abrir após o setup.
+    await Hive.openBox('passwords');
+  }
+
+  //await Hive.openBox('passwords');
+
+  // 3. Lógica de Segurança
+  //final security = SecurityService();
+  //bool isFirst = await security.isFirstAccess();
 
   // 4. Inicia o App passando a informação do primeiro acesso
   runApp(PasswMobApp(isFirstAccess: isFirst));
@@ -37,9 +58,10 @@ class PasswMobApp extends StatelessWidget {
         useMaterial3: true, // Habilita o visual moderno do Android/iOS
       ),
       // Se for primeiro acesso, vai para /setup, senão vai para /home
-      initialRoute: isFirstAccess ? '/setup' : '/home',
+      initialRoute: isFirstAccess ? '/setup' : '/login',
       routes: {
         '/setup': (context) => const SetupScreen(),
+        '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),
       },
     );
