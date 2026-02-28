@@ -61,7 +61,7 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
             children: [
               // Seletor de Grupo (Dropdown)
               DropdownButtonFormField<String>(
-                value: _selectedGroup,
+                initialValue: _selectedGroup,
                 decoration: const InputDecoration(
                   labelText: 'Grupo / Categoria',
                 ),

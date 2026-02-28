@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 // Importando seus novos arquivos (ajuste o caminho se necessário)
+import 'screens/credential_form_screen.dart';
 import 'screens/setup_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/security_service.dart';
+import 'services/database_service.dart';
 
 void main() async {
   // 1. Garante que os plugins do sistema estejam prontos
@@ -18,27 +20,25 @@ void main() async {
 
   // Só tentamos abrir a box com chave se NÃO for o primeiro acesso
   if (!isFirst) {
-    final encryptionKey = await security.generateEncryptionKey();
+    try {
+      final encryptionKey = await security.generateEncryptionKey();
 
-    // Abrimos a box usando a chave gerada!
-    // Agora o Hive salva tudo criptografado automaticamente no disco.
-    await Hive.openBox(
-      'passwords',
-      encryptionCipher: HiveAesCipher(encryptionKey),
-    );
+      // Abrimos a box usando a chave gerada!
+      // Agora o Hive salva tudo criptografado automaticamente no disco.
+      await Hive.openBox(
+        'passwords',
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
+    } catch (e) {
+      print("Erro ao abrir banco criptografado: $e");
+    }
   } else {
     // Se for o primeiro acesso, abrimos sem chave apenas para não dar erro,
     // ou deixamos para abrir após o setup.
     await Hive.openBox('passwords');
   }
 
-  //await Hive.openBox('passwords');
-
-  // 3. Lógica de Segurança
-  //final security = SecurityService();
-  //bool isFirst = await security.isFirstAccess();
-
-  // 4. Inicia o App passando a informação do primeiro acesso
+  // Inicia o App passando a informação do primeiro acesso
   runApp(PasswMobApp(isFirstAccess: isFirst));
 }
 
@@ -63,27 +63,69 @@ class PasswMobApp extends StatelessWidget {
         '/setup': (context) => const SetupScreen(),
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),
+        '/add': (context) =>
+            const CredentialFormScreen(), // <--- ADICIONE ESTA LINHA
       },
     );
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final _dbService = DatabaseService();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('PASSWMOB - Cofre')),
-      body: const Center(
-        child: Text(
-          'Seu cofre está vazio.\nToque no + para começar.',
-          textAlign: TextAlign.center,
-        ),
+      body: FutureBuilder<List<Map>>(
+        future: _dbService.getAllCredentials(), // Busca os dados no Hive
+        builder: (context, snapshot) {
+          // 1. Enquanto carrega
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // 2. Se estiver vazio
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('Nenhuma senha salva ainda.'));
+          }
+
+          final credentials = snapshot.data!;
+
+          // 3. Lista de senhas
+          return ListView.builder(
+            itemCount: credentials.length,
+            itemBuilder: (context, index) {
+              final item = credentials[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.vpn_key)),
+                  title: Text(item['alias'] ?? 'Sem nome'),
+                  subtitle: Text(item['group'] ?? 'Geral'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    // Futuro: Abrir detalhes
+                  },
+                ),
+              );
+            },
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          print("Botão pressionado!");
+        onPressed: () async {
+          // Esperamos o usuário voltar da tela de cadastro
+          await Navigator.pushNamed(context, '/add');
+          // Quando ele voltar, atualizamos a lista
+          setState(() {});
         },
         child: const Icon(Icons.add),
       ),

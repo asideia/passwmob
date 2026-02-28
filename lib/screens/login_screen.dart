@@ -38,8 +38,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (canBio) {
       bool success = await _bioService.authenticate();
       if (success && mounted) {
+        // Se a biometria der certo, vamos para a Home
         Navigator.pushReplacementNamed(context, '/home');
       }
+    } else {
+      print("Biometria não disponível neste dispositivo");
     }
   }
 
@@ -47,7 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     // Opcional: Tentar biometria assim que a tela abrir
-    _authenticateWithBio();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authenticateWithBio();
+    });
   }
 
   @override
