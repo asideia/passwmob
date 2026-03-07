@@ -64,13 +64,29 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.lock_outline, size: 80, color: Colors.blue),
-              const SizedBox(height: 20),
-              const Text(
-                'PASSWMOB Bloqueado',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              Image.asset(
+                'assets/images/logo_with_name.png',
+                height: 180, // Tamanho sugerido para o seu logo
+                errorBuilder: (context, error, stackTrace) {
+                  // Isso evita que o app mostre aquele erro feio na tela se o asset falhar
+                  return const Icon(
+                    Icons.lock_person,
+                    size: 100,
+                    color: Color(0xFFB11B1F),
+                  );
+                },
               ),
               const SizedBox(height: 30),
+              const Text(
+                'Bloqueado',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(height: 40),
               TextField(
                 controller: _passController,
                 obscureText: _obscurePassword,

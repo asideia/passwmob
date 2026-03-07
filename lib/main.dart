@@ -9,6 +9,88 @@ import 'screens/login_screen.dart';
 import 'services/security_service.dart';
 import 'services/database_service.dart';
 
+ThemeData _buildPasswMobTheme() {
+  return ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark, // Define o modo escuro como padrão
+    primaryColor: const Color(0xFFB11B1F),
+    scaffoldBackgroundColor: Colors.black,
+
+    // Configuração das cores de superfície (Cards, Diálogos)
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFFB11B1F),
+      secondary: Colors.white,
+      surface: Color(0xFF121212), // Um cinza bem escuro para os cards
+      onSurface: Colors.white,
+    ),
+
+    // Estilo padrão dos Inputs (Fields)
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: const Color(0xFF1E1E1E),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFB11B1F), width: 2),
+      ),
+      labelStyle: const TextStyle(color: Colors.white70),
+    ),
+
+    // Estilo dos Botões Elevados
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFB11B1F),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.bold),
+      ),
+    ),
+
+    // Estilo da AppBar
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      centerTitle: true,
+    ),
+  );
+}
+
+// Função auxiliar para ícones por categoria
+// Widget _getGroupIcon(String group) {
+//   switch (group) {
+//     case 'Social Media':
+//       return const Icon(Icons.people, color: Colors.blue);
+//     case 'Banking':
+//       return const Icon(Icons.account_balance, color: Colors.green);
+//     case 'Work':
+//       return const Icon(Icons.work, color: Colors.brown);
+//     case 'Study':
+//       return const Icon(Icons.school, color: Colors.orange);
+//     default:
+//       return const Icon(Icons.vpn_key, color: Colors.grey);
+//   }
+// }
+
+// Mude de Widget para IconData
+IconData _getGroupIconData(String group) {
+  switch (group) {
+    case 'Social Media':
+      return Icons.people;
+    case 'Banking':
+      return Icons.account_balance;
+    case 'Work':
+      return Icons.work;
+    case 'Study':
+      return Icons.school;
+    default:
+      return Icons.vpn_key;
+  }
+}
+
 void main() async {
   // 1. Garante que os plugins do sistema estejam prontos
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,11 +135,7 @@ class PasswMobApp extends StatelessWidget {
     return MaterialApp(
       title: 'PASSWMOB',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
-        useMaterial3: true, // Habilita o visual moderno do Android/iOS
-      ),
+      theme: _buildPasswMobTheme(),
       // Se for primeiro acesso, vai para /setup, senão vai para /home
       initialRoute: isFirstAccess ? '/setup' : '/login',
       routes: {
@@ -93,13 +171,19 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.all(8.0),
             child: TextField(
               decoration: InputDecoration(
-                hintText: 'Filtrar por nome, nota, user ou grupo...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                hintText: 'Filtrar credenciais...',
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: Color(0xFFB11B1F),
+                ), // Ícone vermelho
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: const Color(
+                  0xFF1E1E1E,
+                ), // Fundo levemente mais claro que o scaffold
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
               ),
               onChanged: (value) =>
                   setState(() => _searchQuery = value.toLowerCase()),
@@ -159,12 +243,18 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   // Cabeçalho do Grupo
                   Padding(
-                    padding: const EdgeInsets.all(12.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
                     child: Text(
                       category.toUpperCase(),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.blue,
+                        color: Colors.white, // Alterado de azul para branco
+                        letterSpacing:
+                            1.2, // Um toque extra de design para títulos
+                        fontSize: 13,
                       ),
                     ),
                   ),
@@ -178,10 +268,48 @@ class _HomePageState extends State<HomePage> {
                         horizontal: 10,
                         vertical: 4,
                       ),
+                      color: const Color(
+                        0xFF121212,
+                      ), // Fundo do card cinza muito escuro
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.white.withOpacity(0.05),
+                        ), // Borda sutil
+                      ),
                       child: ListTile(
-                        leading: _getGroupIcon(category),
-                        title: Text(item['alias'] ?? ''),
-                        subtitle: Text(item['username'] ?? ''),
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.white.withOpacity(
+                            0.1,
+                          ), // Fundo cinza translúcido
+                          child: Icon(
+                            _getGroupIconData(category),
+                            color: Colors.white, // Ícone agora é Branco
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          item['alias'] ?? '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        subtitle: Text(
+                          item['username'] ?? '',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                          ), // Subtítulo discreto
+                        ),
+                        trailing: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 12,
+                          color: Colors.white.withOpacity(
+                            0.2,
+                          ), // Seta quase invisível
+                        ),
                         onTap: () async {
                           await Navigator.push(
                             context,
@@ -211,21 +339,5 @@ class _HomePageState extends State<HomePage> {
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  // Função auxiliar para ícones por categoria
-  Widget _getGroupIcon(String group) {
-    switch (group) {
-      case 'Social Media':
-        return const Icon(Icons.people, color: Colors.blue);
-      case 'Banking':
-        return const Icon(Icons.account_balance, color: Colors.green);
-      case 'Work':
-        return const Icon(Icons.work, color: Colors.brown);
-      case 'Study':
-        return const Icon(Icons.school, color: Colors.orange);
-      default:
-        return const Icon(Icons.vpn_key, color: Colors.grey);
-    }
   }
 }
