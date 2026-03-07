@@ -27,4 +27,16 @@ class DatabaseService {
     final box = await _getEncryptedBox();
     return box.values.cast<Map>().toList();
   }
+
+  // Deletar usando o index da lista
+  Future<void> deleteCredential(int index) async {
+    final box = await _getEncryptedBox();
+    await box.deleteAt(index);
+  }
+
+  // Editar usando o index
+  Future<void> updateCredential(int index, Map<String, dynamic> data) async {
+    final box = await _getEncryptedBox();
+    await box.putAt(index, data);
+  }
 }

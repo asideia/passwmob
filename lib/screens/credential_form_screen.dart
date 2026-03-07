@@ -9,6 +9,10 @@ class CredentialFormScreen extends StatefulWidget {
 }
 
 class _CredentialFormScreenState extends State<CredentialFormScreen> {
+  bool _obscurePassword = true; // Nova variável de estado
+
+  final _noteController = TextEditingController();
+
   final _formKey =
       GlobalKey<FormState>(); // Para validar se os campos estão vazios
   final _dbService = DatabaseService();
@@ -19,6 +23,7 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _urlController = TextEditingController();
+  final _secretsController = TextEditingController();
 
   // Lista de grupos (podemos expandir depois)
   final List<String> _groups = [
@@ -31,21 +36,18 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
 
   void _save() async {
     if (_formKey.currentState!.validate()) {
-      // Montamos o objeto com os dados do formulário
       final newEntry = {
-        'group': _selectedGroup,
         'alias': _aliasController.text,
+        'group': _selectedGroup,
         'username': _usernameController.text,
         'password': _passwordController.text,
+        'note': _noteController.text, // Novo campo
+        'secrets': _secretsController.text,
         'url': _urlController.text,
         'createdAt': DateTime.now().toIso8601String(),
       };
-
       await _dbService.saveCredential(newEntry);
-
-      if (mounted) {
-        Navigator.pop(context); // Fecha a tela e volta para a Home
-      }
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -71,6 +73,7 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
                 onChanged: (val) => setState(() => _selectedGroup = val!),
               ),
               const SizedBox(height: 15),
+
               TextFormField(
                 controller: _aliasController,
                 decoration: const InputDecoration(
@@ -80,6 +83,7 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
                 validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
               ),
               const SizedBox(height: 15),
+
               TextFormField(
                 controller: _usernameController,
                 decoration: const InputDecoration(
@@ -88,15 +92,26 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
                 ),
               ),
               const SizedBox(height: 15),
+
               TextFormField(
                 controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
+                obscureText: _obscurePassword, // Usa a variável
+                decoration: InputDecoration(
                   labelText: 'Password (Opcional)',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility
+                          : Icons.visibility_off,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
                 ),
               ),
               const SizedBox(height: 15),
+
               TextFormField(
                 controller: _urlController,
                 decoration: const InputDecoration(
@@ -105,6 +120,30 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
                 ),
               ),
               const SizedBox(height: 30),
+
+              // Campo Note (Opcional)
+              TextFormField(
+                controller: _noteController,
+                maxLines: 3, // Começa com 3 linhas, mas expande
+                decoration: const InputDecoration(
+                  labelText: 'Notes (App, system, info, etc.)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+
+              // Campo Secrets (Opcional)
+              TextFormField(
+                controller: _secretsController,
+                maxLines: null, // Expansão infinita para chaves longas
+                decoration: const InputDecoration(
+                  labelText: 'Secrets (Passkeys, extra keys, etc.)',
+                  border: OutlineInputBorder(),
+                  helperText:
+                      'Cole aqui suas chaves de segurança ou segredos extras.',
+                ),
+              ),
+
               SizedBox(
                 width: double.infinity,
                 height: 50,

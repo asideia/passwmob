@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 // Importando seus novos arquivos (ajuste o caminho se necessário)
+import 'screens/credential_details_screen.dart';
 import 'screens/credential_form_screen.dart';
 import 'screens/setup_screen.dart';
 import 'screens/login_screen.dart';
@@ -111,8 +112,15 @@ class _HomePageState extends State<HomePage> {
                   title: Text(item['alias'] ?? 'Sem nome'),
                   subtitle: Text(item['group'] ?? 'Geral'),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    // Futuro: Abrir detalhes
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            CredentialDetailsScreen(item: item, index: index),
+                      ),
+                    );
+                    setState(() {}); // Atualiza a lista quando voltar
                   },
                 ),
               );
