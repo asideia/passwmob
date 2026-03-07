@@ -80,49 +80,124 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _dbService = DatabaseService();
+  String _searchQuery = ""; // Para o campo de busca
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('PASSWMOB - Cofre')),
+      appBar: AppBar(
+        title: const Text('PASSWMOB - Cofre'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Filtrar por nome, nota, user ou grupo...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+              onChanged: (value) =>
+                  setState(() => _searchQuery = value.toLowerCase()),
+            ),
+          ),
+        ),
+      ),
       body: FutureBuilder<List<Map>>(
-        future: _dbService.getAllCredentials(), // Busca os dados no Hive
+        future: _dbService.getAllCredentials(),
         builder: (context, snapshot) {
-          // 1. Enquanto carrega
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // 2. Se estiver vazio
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Nenhuma senha salva ainda.'));
+            return const Center(child: Text('Nenhuma senha salva.'));
           }
 
-          final credentials = snapshot.data!;
+          // --- LOGICA DE FILTRO E ORDENAÇÃO ---
+          var list = snapshot.data!;
 
-          // 3. Lista de senhas
+          // 1. Filtro (Alias, Notes, Username e Group)
+          var filtered = list.where((item) {
+            final alias = (item['alias'] ?? '').toString().toLowerCase();
+            final note = (item['note'] ?? '').toString().toLowerCase();
+            final user = (item['username'] ?? '').toString().toLowerCase();
+            final group = (item['group'] ?? '').toString().toLowerCase();
+
+            return alias.contains(_searchQuery) ||
+                note.contains(_searchQuery) ||
+                user.contains(_searchQuery) ||
+                group.contains(_searchQuery);
+          }).toList();
+
+          // 2. Ordenação por Alias (A-Z)
+          filtered.sort(
+            (a, b) => (a['alias'] ?? '').compareTo(b['alias'] ?? ''),
+          );
+
+          // 3. Agrupamento por Categoria
+          Map<String, List<Map>> grouped = {};
+          for (var item in filtered) {
+            String category = item['group'] ?? 'Others';
+            grouped.putIfAbsent(category, () => []).add(item);
+          }
+
+          final categories = grouped.keys.toList()..sort();
+
           return ListView.builder(
-            itemCount: credentials.length,
-            itemBuilder: (context, index) {
-              final item = credentials[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.vpn_key)),
-                  title: Text(item['alias'] ?? 'Sem nome'),
-                  subtitle: Text(item['group'] ?? 'Geral'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            CredentialDetailsScreen(item: item, index: index),
+            itemCount: categories.length,
+            itemBuilder: (context, catIndex) {
+              final category = categories[catIndex];
+              final items = grouped[category]!;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Cabeçalho do Grupo
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                      category.toUpperCase(),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ),
+                  // Itens do Grupo
+                  ...items.map((item) {
+                    // Precisamos achar o index original para editar/excluir corretamente
+                    int originalIndex = list.indexOf(item);
+
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      child: ListTile(
+                        leading: _getGroupIcon(category),
+                        title: Text(item['alias'] ?? ''),
+                        subtitle: Text(item['username'] ?? ''),
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CredentialDetailsScreen(
+                                item: item,
+                                index: originalIndex,
+                              ),
+                            ),
+                          );
+                          setState(() {});
+                        },
                       ),
                     );
-                    setState(() {}); // Atualiza a lista quando voltar
-                  },
-                ),
+                  }).toList(),
+                ],
               );
             },
           );
@@ -130,13 +205,27 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // Esperamos o usuário voltar da tela de cadastro
           await Navigator.pushNamed(context, '/add');
-          // Quando ele voltar, atualizamos a lista
           setState(() {});
         },
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  // Função auxiliar para ícones por categoria
+  Widget _getGroupIcon(String group) {
+    switch (group) {
+      case 'Social Media':
+        return const Icon(Icons.people, color: Colors.blue);
+      case 'Banking':
+        return const Icon(Icons.account_balance, color: Colors.green);
+      case 'Work':
+        return const Icon(Icons.work, color: Colors.brown);
+      case 'Study':
+        return const Icon(Icons.school, color: Colors.orange);
+      default:
+        return const Icon(Icons.vpn_key, color: Colors.grey);
+    }
   }
 }
