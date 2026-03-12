@@ -46,4 +46,8 @@ class SecurityService {
   Future<String?> getMasterPassword() async {
     return await _storage.read(key: _masterKeyName);
   }
+
+  Future<String?> getSecretSalt() async {
+    return await _storage.read(key: _saltKeyName);
+  }
 }

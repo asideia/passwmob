@@ -39,4 +39,15 @@ class DatabaseService {
     final box = await _getEncryptedBox();
     await box.putAt(index, data);
   }
+
+  // No seu DatabaseService
+  Future<String?> getMasterPassword() async {
+    var box = await Hive.openBox('settings');
+    return box.get('master_password');
+  }
+
+  Future<void> saveMasterPassword(String newPassword) async {
+    var box = await Hive.openBox('settings');
+    await box.put('master_password', newPassword);
+  }
 }

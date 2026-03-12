@@ -6,74 +6,51 @@ import 'screens/credential_details_screen.dart';
 import 'screens/credential_form_screen.dart';
 import 'screens/setup_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/settings_screen.dart';
 import 'services/security_service.dart';
 import 'services/database_service.dart';
 
-ThemeData _buildPasswMobTheme() {
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
+
+ThemeData _buildPasswMobTheme({required bool isDark}) {
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark, // Define o modo escuro como padrão
-    primaryColor: const Color(0xFFB11B1F),
-    scaffoldBackgroundColor: Colors.black,
+    brightness: isDark ? Brightness.dark : Brightness.light,
 
-    // Configuração das cores de superfície (Cards, Diálogos)
-    colorScheme: const ColorScheme.dark(
-      primary: Color(0xFFB11B1F),
-      secondary: Colors.white,
-      surface: Color(0xFF121212), // Um cinza bem escuro para os cards
-      onSurface: Colors.white,
+    // Vermelho Shield Red do seu logo
+    primaryColor: const Color(0xFFB11B1F),
+
+    // Cores de Fundo
+    scaffoldBackgroundColor: isDark ? Colors.black : Colors.white,
+
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xFFB11B1F),
+      brightness: isDark ? Brightness.dark : Brightness.light,
+      primary: const Color(0xFFB11B1F),
+      surface: isDark ? const Color(0xFF121212) : Colors.grey[100],
+      secondary: const Color(0xFFB11B1F),
     ),
 
-    // Estilo padrão dos Inputs (Fields)
+    appBarTheme: AppBarTheme(
+      backgroundColor: isDark ? Colors.black : Colors.white,
+      foregroundColor: isDark ? Colors.white : Colors.black,
+      elevation: 0,
+      centerTitle: true,
+    ),
+
+    // Mantém o estilo dos Inputs coerente
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFF1E1E1E),
+      fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
+      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+      prefixIconColor: const Color(0xFFB11B1F),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFB11B1F), width: 2),
-      ),
-      labelStyle: const TextStyle(color: Colors.white70),
-    ),
-
-    // Estilo dos Botões Elevados
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFB11B1F),
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-    ),
-
-    // Estilo da AppBar
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Colors.black,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: true,
     ),
   );
 }
-
-// Função auxiliar para ícones por categoria
-// Widget _getGroupIcon(String group) {
-//   switch (group) {
-//     case 'Social Media':
-//       return const Icon(Icons.people, color: Colors.blue);
-//     case 'Banking':
-//       return const Icon(Icons.account_balance, color: Colors.green);
-//     case 'Work':
-//       return const Icon(Icons.work, color: Colors.brown);
-//     case 'Study':
-//       return const Icon(Icons.school, color: Colors.orange);
-//     default:
-//       return const Icon(Icons.vpn_key, color: Colors.grey);
-//   }
-// }
 
 // Mude de Widget para IconData
 IconData _getGroupIconData(String group) {
@@ -132,18 +109,31 @@ class PasswMobApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PASSWMOB',
-      debugShowCheckedModeBanner: false,
-      theme: _buildPasswMobTheme(),
-      // Se for primeiro acesso, vai para /setup, senão vai para /home
-      initialRoute: isFirstAccess ? '/setup' : '/login',
-      routes: {
-        '/setup': (context) => const SetupScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomePage(),
-        '/add': (context) =>
-            const CredentialFormScreen(), // <--- ADICIONE ESTA LINHA
+    // 2. O Builder "escuta" o themeNotifier
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          title: 'PASSWMOB',
+          debugShowCheckedModeBanner: false,
+
+          // 3. Define qual tema usar baseado no themeNotifier
+          themeMode: currentMode,
+
+          // Tema Claro (Light)
+          theme: _buildPasswMobTheme(isDark: false),
+
+          // Tema Escuro (Dark)
+          darkTheme: _buildPasswMobTheme(isDark: true),
+
+          initialRoute: isFirstAccess ? '/setup' : '/login',
+          routes: {
+            '/setup': (context) => const SetupScreen(),
+            '/login': (context) => const LoginScreen(),
+            '/home': (context) => const HomePage(),
+            '/add': (context) => const CredentialFormScreen(),
+          },
+        );
       },
     );
   }
@@ -165,23 +155,47 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('PASSWMOB - Cofre'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
+              ),
               decoration: InputDecoration(
-                hintText: 'Filtrar credenciais...',
-                prefixIcon: const Icon(
+                hintText: 'Filtrar por nome, nota, user ou grupo...',
+                hintStyle: TextStyle(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white54
+                      : Colors.black54,
+                ),
+                prefixIcon: Icon(
                   Icons.search,
-                  color: Color(0xFFB11B1F),
-                ), // Ícone vermelho
+                  color: const Color(
+                    0xFFB11B1F,
+                  ), // Mantém o vermelho do logo como destaque
+                ),
+                // A mágica acontece aqui:
                 filled: true,
-                fillColor: const Color(
-                  0xFF1E1E1E,
-                ), // Fundo levemente mais claro que o scaffold
+                fillColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF1E1E1E) // Cinza escuro no Dark
+                    : Colors.grey[200], // Cinza claro no Light
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
                 ),
               ),
