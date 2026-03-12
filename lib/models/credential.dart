@@ -5,8 +5,9 @@ class Credential {
   final String? password; // Opcional
   final String? note; // Opcional (para App, Sistema, etc)
   final String? url; // Opcional
-  final Map<String, String>?
-  secrets; // Opcional (para Passkeys ou chaves extras)
+  final Map<String, String>? secrets; // Opcional (para Passkeys ou extras)
+  final DateTime createdAt; // Novo
+  final DateTime updatedAt; // Novo
 
   Credential({
     required this.alias,
@@ -16,5 +17,7 @@ class Credential {
     this.note,
     this.url,
     this.secrets,
+    required this.createdAt,
+    required this.updatedAt,
   });
 }

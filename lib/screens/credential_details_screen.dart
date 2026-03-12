@@ -146,8 +146,22 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
     }
   }
 
+  // Função para formatar a data de forma legível
+  String _formatDate(dynamic date) {
+    if (date == null) return "N/A";
+    DateTime dateTime;
+    if (date is String) {
+      dateTime = DateTime.parse(date);
+    } else {
+      dateTime = date;
+    }
+    return "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editando' : 'Detalhes'),
@@ -276,6 +290,37 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
                 enabled: _isEditing,
                 maxLines: 5, // Visualização maior para chaves complexas
               ),
+
+              // SEÇÃO DE AUDITORIA (Datas do Sistema)
+              if (!_isEditing) ...[
+                const SizedBox(height: 30),
+                const Divider(),
+                const SizedBox(height: 10),
+                Text(
+                  "METADADOS DO REGISTRO",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFFB11B1F).withOpacity(0.8),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                _buildAuditInfo(
+                  Icons.add_circle_outline,
+                  "Criado em:",
+                  _formatDate(widget.item['createdAt']),
+                  isDark,
+                ),
+                const SizedBox(height: 8),
+                _buildAuditInfo(
+                  Icons.history,
+                  "Última alteração:",
+                  _formatDate(widget.item['updatedAt']),
+                  isDark,
+                ),
+                const SizedBox(height: 60),
+              ],
             ],
           ),
         ),
@@ -302,6 +347,38 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
           suffixIcon: !enabled ? const Icon(Icons.copy_all, size: 18) : null,
         ),
       ),
+    );
+  }
+
+  // Widget para mostrar as datas (não editáveis)
+  Widget _buildAuditInfo(
+    IconData icon,
+    String label,
+    String value,
+    bool isDark,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.white70 : Colors.black87,
+            fontFamily: 'monospace', // Estilo técnico para datas
+          ),
+        ),
+      ],
     );
   }
 }
