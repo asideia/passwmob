@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Necessário para o Clipboard
+import 'package:passwmob/screens/qr_scanner_screen.dart';
+import '../models/credential.dart';
 import '../services/database_service.dart';
+import 'package:intl/intl.dart'; // Certifique-se de ter o intl no pubspec
 
 class CredentialDetailsScreen extends StatefulWidget {
-  final Map item;
+  final Credential item;
   final int index;
 
   const CredentialDetailsScreen({
@@ -21,182 +23,152 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
   final _dbService = DatabaseService();
   final _formKey = GlobalKey<FormState>();
 
-  // Estado de controle
-  bool _isEditing = false;
-  bool _obscure = true;
-
   late TextEditingController _aliasController;
   late TextEditingController _usernameController;
   late TextEditingController _passwordController;
   late TextEditingController _urlController;
   late TextEditingController _noteController;
-  late TextEditingController _secretsController;
   late String _selectedGroup;
 
-  final List<String> _groups = [
-    'Social Media',
-    'Study',
-    'Work',
-    'Banking',
-    'Others',
-  ];
+  // Variável para controlar a visibilidade da senha
+  bool _obscurePassword = true;
+
+  // Variáveis para controlar 2FA durante a edição
+  String? _current2FASecret;
+  String? _current2FALabel;
 
   @override
   void initState() {
     super.initState();
-    // Inicializa os campos com os valores que vieram do banco
-    _aliasController = TextEditingController(text: widget.item['alias']);
-    _usernameController = TextEditingController(text: widget.item['username']);
-    _passwordController = TextEditingController(text: widget.item['password']);
-    _urlController = TextEditingController(text: widget.item['url']);
-    _selectedGroup = widget.item['group'] ?? 'Others';
-    _noteController = TextEditingController(text: widget.item['note'] ?? '');
-    _secretsController = TextEditingController(
-      text: widget.item['secrets'] ?? '',
+    _aliasController = TextEditingController(text: widget.item.alias);
+    _usernameController = TextEditingController(
+      text: widget.item.username ?? '',
     );
+    _passwordController = TextEditingController(
+      text: widget.item.password ?? '',
+    );
+    _urlController = TextEditingController(text: widget.item.url ?? '');
+    _noteController = TextEditingController(text: widget.item.note ?? '');
+    _selectedGroup = widget.item.group;
+    _current2FASecret = widget.item.twoFactorSecret;
+    _current2FALabel = widget.item.twoFactorLabel;
   }
 
-  // Função para copiar texto e mostrar um aviso (SnackBar)
-  void _copyToClipboard(String text, String label) {
-    if (text.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$label copiado!'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+  String _formatDate(DateTime date) {
+    return DateFormat('dd/MM/yyyy HH:mm').format(date);
   }
 
-  void _confirmDelete() {
-    showDialog(
+  void _saveChanges() async {
+    if (_formKey.currentState!.validate()) {
+      // Criamos um NOVO objeto com os dados atualizados
+      final updatedCredential = Credential(
+        alias: _aliasController.text,
+        group: _selectedGroup,
+        username: _usernameController.text,
+        password: _passwordController.text,
+        note: _noteController.text,
+        url: _urlController.text,
+        twoFactorSecret: _current2FASecret,
+        twoFactorLabel: _current2FALabel,
+        createdAt: widget.item.createdAt, // Mantém a data original
+        updatedAt: DateTime.now(), // Atualiza a data de modificação
+      );
+
+      await _dbService.updateCredential(widget.index, updatedCredential);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Alterações salvas com sucesso!')),
+        );
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  void _confirmDelete() async {
+    final bool? confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Excluir Credencial"),
-        content: const Text(
-          "Isso apagará os dados permanentemente. Confirmar?",
+        title: const Text('Excluir Credencial'),
+        content: const Text('Tem certeza que deseja apagar esta senha?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _dbService.deleteCredential(widget.index);
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  void _showManualOtpDialog() async {
+    final secretController = TextEditingController();
+    final labelController = TextEditingController(text: "Código Manual");
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Configurar 2FA Manual'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelController,
+              decoration: const InputDecoration(
+                labelText: 'Identificador (ex: Conta)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: secretController,
+              decoration: const InputDecoration(labelText: 'Chave Secreta'),
+              autocorrect: false,
+              enableSuggestions: false,
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+            child: const Text('Cancelar'),
           ),
-          TextButton(
-            onPressed: () async {
-              await _dbService.deleteCredential(widget.index);
-              if (mounted) {
-                Navigator.pop(context); // Fecha o alerta
-                Navigator.pop(context); // Volta para a Home
+          ElevatedButton(
+            onPressed: () {
+              if (secretController.text.trim().isNotEmpty) {
+                setState(() {
+                  _current2FASecret = secretController.text.trim();
+                  _current2FALabel = labelController.text.trim();
+                });
+                Navigator.pop(context);
               }
             },
-            child: const Text("Excluir", style: TextStyle(color: Colors.red)),
+            child: const Text('Confirmar'),
           ),
         ],
       ),
     );
   }
 
-  void _saveChanges() async {
-    if (_formKey.currentState!.validate()) {
-      // Criamos o mapa com TODOS os campos definidos no seu escopo de prioridades
-      final updatedData = {
-        'alias': _aliasController.text, // Necessário
-        'group': _selectedGroup, // Necessário
-        'username': _usernameController.text, // Opcional
-        'password': _passwordController.text, // Opcional
-        'url': _urlController.text, // Opcional
-        'note': _noteController.text, // Opcional (Novo)
-        'secrets': _secretsController.text, // Opcional (Novo)
-        'createdAt':
-            widget.item['createdAt'], // Mantém a data de criação original
-        'updatedAt': DateTime.now()
-            .toIso8601String(), // Marca a última alteração
-      };
-
-      try {
-        // 1. Atualiza no Banco de Dados (Hive)
-        await _dbService.updateCredential(widget.index, updatedData);
-
-        // 2. Feedback Visual para o usuário
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Alterações salvas com sucesso!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-
-          // 3. Transição de estado: sai do modo de edição e volta para visualização
-          setState(() {
-            _isEditing = false;
-          });
-        }
-      } catch (e) {
-        // Caso ocorra algum erro no banco (ex: falta de espaço ou chave corrompida)
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao salvar: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // Função para formatar a data de forma legível
-  String _formatDate(dynamic date) {
-    if (date == null) return "N/A";
-    DateTime dateTime;
-    if (date is String) {
-      dateTime = DateTime.parse(date);
-    } else {
-      dateTime = date;
-    }
-    return "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}";
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editando' : 'Detalhes'),
-        leading: _isEditing
-            ? IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () {
-                  // Se cancelar, restauramos os valores originais do controlador
-                  setState(() {
-                    _aliasController.text = widget.item['alias'];
-                    _usernameController.text = widget.item['username'];
-                    _passwordController.text = widget.item['password'];
-                    _urlController.text = widget.item['url'];
-                    _selectedGroup = widget.item['group'] ?? 'Others';
-                    _isEditing = false;
-                  });
-                },
-              )
-            : null, // Mantém o botão "voltar" padrão do Flutter quando não edita
+        title: const Text('Detalhes'),
         actions: [
           IconButton(
-            icon: Icon(_isEditing ? Icons.save : Icons.edit),
-            onPressed: () {
-              if (_isEditing) {
-                _saveChanges();
-              } else {
-                setState(() => _isEditing = true);
-              }
-            },
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: _confirmDelete,
           ),
-          if (!_isEditing)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _confirmDelete,
-            ),
+          IconButton(icon: const Icon(Icons.check), onPressed: _saveChanges),
         ],
       ),
       body: SingleChildScrollView(
@@ -206,121 +178,102 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!_isEditing)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 20),
-                  child: Text(
-                    "Dica: Pressione e segure um campo para copiar.",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
+              // Informações de Sistema (Read Only)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _infoTile("Criado em", _formatDate(widget.item.createdAt)),
+                  _infoTile(
+                    "Atualizado em",
+                    _formatDate(widget.item.updatedAt),
                   ),
-                ),
-
-              // Campo Grupo
-              DropdownButtonFormField<String>(
-                value: _selectedGroup,
-                items: _groups
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
-                onChanged: _isEditing
-                    ? (val) => setState(() => _selectedGroup = val!)
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Grupo',
-                  border: OutlineInputBorder(),
-                ),
+                ],
               ),
-              const SizedBox(height: 15),
+              const Divider(height: 32),
 
-              // Reutilizamos essa lógica para os campos de texto
-              _buildEditableField(
-                controller: _aliasController,
-                label: 'Alias',
-                enabled: _isEditing,
+              // Campos Editáveis
+              _buildTextField('Nome / Alias', _aliasController, Icons.label),
+              const SizedBox(height: 16),
+
+              _buildDropdownGroup(),
+              const SizedBox(height: 16),
+
+              _buildTextField('Usuário', _usernameController, Icons.person),
+              const SizedBox(height: 16),
+
+              _buildTextField(
+                'Senha',
+                _passwordController,
+                Icons.lock,
+                isPassword: true,
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 16),
 
-              _buildEditableField(
-                controller: _usernameController,
-                label: 'Username / E-mail',
-                enabled: _isEditing,
-              ),
-              const SizedBox(height: 15),
+              _buildTextField('URL', _urlController, Icons.link),
+              const SizedBox(height: 16),
 
-              // Campo de Senha com Olhinho
-              GestureDetector(
-                onLongPress: () =>
-                    _copyToClipboard(_passwordController.text, 'Senha'),
-                child: TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscure,
-                  enabled: _isEditing,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscure ? Icons.visibility : Icons.visibility_off,
-                      ),
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              _buildEditableField(
-                controller: _urlController,
-                label: 'URL / Site',
-                enabled: _isEditing,
-              ),
-
-              // ... campos anteriores (Alias, Username, Password, URL)
-              const SizedBox(height: 15),
-              _buildEditableField(
-                controller: _noteController,
-                label: 'Notes',
-                enabled: _isEditing,
+              _buildTextField(
+                'Notas',
+                _noteController,
+                Icons.note,
                 maxLines: 3,
               ),
+              const SizedBox(height: 24),
 
-              const SizedBox(height: 15),
-              _buildEditableField(
-                controller: _secretsController,
-                label: 'Secrets / Passkeys',
-                enabled: _isEditing,
-                maxLines: 5, // Visualização maior para chaves complexas
+              // Seção de 2FA
+              const Text(
+                "Autenticação 2FA",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-
-              // SEÇÃO DE AUDITORIA (Datas do Sistema)
-              if (!_isEditing) ...[
-                const SizedBox(height: 30),
-                const Divider(),
-                const SizedBox(height: 10),
-                Text(
-                  "METADADOS DO REGISTRO",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFFB11B1F).withOpacity(0.8),
-                    letterSpacing: 1.2,
+              const SizedBox(height: 8),
+              if (_current2FASecret != null)
+                ListTile(
+                  tileColor: Colors.blueGrey.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  leading: const Icon(Icons.vibration),
+                  title: Text(_current2FALabel ?? "Código 2FA Ativo"),
+                  subtitle: const Text("Configurado"),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    onPressed: () => setState(() => _current2FASecret = null),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const QrScannerScreen(),
+                            ),
+                          );
+
+                          if (result != null && result is Map<String, String>) {
+                            setState(() {
+                              _current2FASecret = result['secret'];
+                              _current2FALabel = result['label'];
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.qr_code_scanner),
+                        label: const Text("QR Code"),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _showManualOtpDialog,
+                        icon: const Icon(Icons.edit),
+                        label: const Text("Manual"),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 15),
-                _buildAuditInfo(
-                  Icons.add_circle_outline,
-                  "Criado em:",
-                  _formatDate(widget.item['createdAt']),
-                  isDark,
-                ),
-                const SizedBox(height: 8),
-                _buildAuditInfo(
-                  Icons.history,
-                  "Última alteração:",
-                  _formatDate(widget.item['updatedAt']),
-                  isDark,
-                ),
-                const SizedBox(height: 60),
-              ],
             ],
           ),
         ),
@@ -328,57 +281,80 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
     );
   }
 
-  // Helper para criar campos que podem ser copiados
-  Widget _buildEditableField({
-    required TextEditingController controller,
-    required String label,
-    required bool enabled,
-    int? maxLines = 1, // Por padrão 1 linha, mas aceita mais
-  }) {
-    return GestureDetector(
-      onLongPress: () => _copyToClipboard(controller.text, label),
-      child: TextFormField(
-        controller: controller,
-        enabled: enabled,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          suffixIcon: !enabled ? const Icon(Icons.copy_all, size: 18) : null,
+  Widget _infoTile(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
         ),
-      ),
+      ],
     );
   }
 
-  // Widget para mostrar as datas (não editáveis)
-  Widget _buildAuditInfo(
-    IconData icon,
+  Widget _buildTextField(
     String label,
-    String value,
-    bool isDark,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? Colors.white70 : Colors.black87,
-            fontFamily: 'monospace', // Estilo técnico para datas
-          ),
-        ),
-      ],
+    TextEditingController controller,
+    IconData icon, {
+    bool isPassword = false,
+    bool isRequired = false,
+    int maxLines = 1,
+  }) {
+    return TextFormField(
+      controller: controller,
+      // obscureText: isPassword,
+      obscureText: isPassword ? _obscurePassword : false,
+      maxLines: isPassword ? 1 : maxLines,
+      // decoration: InputDecoration(
+      //   labelText: label,
+      //   prefixIcon: Icon(icon),
+      //   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      // ),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        // Adiciona o ícone do olhinho apenas se for campo de senha
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  color: Colors.grey,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              )
+            : null,
+      ),
+      // validator: (value) =>
+      //     value == null || value.isEmpty ? 'Obrigatório' : null,
+      validator: (value) {
+        if (isRequired && (value == null || value.isEmpty)) {
+          return 'Obrigatório';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildDropdownGroup() {
+    final groups = ['Social Media', 'Banking', 'Work', 'Study', 'Others'];
+    return DropdownButtonFormField<String>(
+      value: groups.contains(_selectedGroup) ? _selectedGroup : 'Others',
+      decoration: InputDecoration(
+        labelText: 'Grupo',
+        prefixIcon: const Icon(Icons.group_work),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      items: groups
+          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+          .toList(),
+      onChanged: (value) => setState(() => _selectedGroup = value!),
     );
   }
 }

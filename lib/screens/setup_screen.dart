@@ -10,19 +10,24 @@ class SetupScreen extends StatefulWidget {
 
 class _SetupScreenState extends State<SetupScreen> {
   final _passController = TextEditingController();
-  final _saltController = TextEditingController();
+  final _confirmController =
+      TextEditingController(); // Troquei o Salt por Confirmação
   final _security = SecurityService();
 
-  // 1. Criamos a variável que controla a visibilidade
   bool _obscurePassword = true;
 
   void _saveAndStart() async {
-    if (_passController.text.isNotEmpty && _saltController.text.isNotEmpty) {
-      await _security.setupFirstAccess(
-        _passController.text,
-        _saltController.text,
-      );
-      // Após salvar, envia o usuário para a Home
+    if (_passController.text.isNotEmpty) {
+      if (_passController.text != _confirmController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('As senhas não coincidem!')),
+        );
+        return;
+      }
+
+      // CORREÇÃO: Passamos apenas 1 argumento conforme definido no SecurityService
+      await _security.setupFirstAccess(_passController.text);
+
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/home');
       }
@@ -37,50 +42,53 @@ class _SetupScreenState extends State<SetupScreen> {
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              const Text('Defina sua Senha Master e um Salt Secreto.'),
+              const Icon(Icons.security, size: 80, color: Color(0xFFB11B1F)),
               const SizedBox(height: 20),
-
-              // O Campo da Senha Master atualizado:
+              const Text(
+                'Defina sua Senha Master.\nEsta senha criptografa todo o seu cofre.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 30),
               TextField(
                 controller: _passController,
-                obscureText: _obscurePassword, // Usa a nossa variável aqui
+                obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Senha Master',
+                  labelText: 'Nova Senha Master',
                   border: const OutlineInputBorder(),
-                  // 2. Adicionamos o ícone no final do campo (suffixIcon)
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
                           ? Icons.visibility
                           : Icons.visibility_off,
                     ),
-                    onPressed: () {
-                      // 3. O setState avisa o Flutter para redesenhar a tela
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 10),
+              const SizedBox(height: 15),
               TextField(
-                controller: _saltController,
+                controller: _confirmController,
+                obscureText: _obscurePassword,
                 decoration: const InputDecoration(
-                  labelText: 'Seu Secret Salt (ex: frase ou palavra)',
+                  labelText: 'Confirme a Senha Master',
                   border: OutlineInputBorder(),
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              ElevatedButton(
-                onPressed: _saveAndStart,
-                child: const Text('Configurar PASSWMOB'),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _saveAndStart,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB11B1F),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Configurar PASSWMOB'),
+                ),
               ),
             ],
           ),

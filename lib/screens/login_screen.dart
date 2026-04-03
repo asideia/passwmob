@@ -18,10 +18,10 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
 
   void _unlockApp() async {
-    // 1. Pegamos a senha master real que salvamos no setup
-    final savedMaster = await _security.getMasterPassword();
+    // CORREÇÃO: Usamos o authenticate() que compara os Hashes internamente
+    final isValid = await _security.authenticate(_passController.text);
 
-    if (_passController.text == savedMaster) {
+    if (isValid) {
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/home');
       }
@@ -32,24 +32,19 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Função para tentar biometria automaticamente ou via botão
   void _authenticateWithBio() async {
     bool canBio = await _bioService.canAuthenticate();
     if (canBio) {
       bool success = await _bioService.authenticate();
       if (success && mounted) {
-        // Se a biometria der certo, vamos para a Home
         Navigator.pushReplacementNamed(context, '/home');
       }
-    } else {
-      print("Biometria não disponível neste dispositivo");
     }
   }
 
   @override
   void initState() {
     super.initState();
-    // Opcional: Tentar biometria assim que a tela abrir
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _authenticateWithBio();
     });
@@ -59,28 +54,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
+          // Adicionado para evitar erro de overflow no teclado
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/images/logo_with_name.png',
-                height: 180, // Tamanho sugerido para o seu logo
-                errorBuilder: (context, error, stackTrace) {
-                  // Isso evita que o app mostre aquele erro feio na tela se o asset falhar
-                  return const Icon(
-                    Icons.lock_person,
-                    size: 100,
-                    color: Color(0xFFB11B1F),
-                  );
-                },
+              const Icon(
+                Icons.lock_person,
+                size: 100,
+                color: Color(0xFFB11B1F),
               ),
               const SizedBox(height: 30),
               const Text(
                 'Bloqueado',
                 style: TextStyle(
-                  color: Colors.white,
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.5,
@@ -111,8 +99,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _unlockApp,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFB11B1F),
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Desbloquear'),
                 ),
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: _authenticateWithBio,
+                icon: const Icon(Icons.fingerprint),
+                label: const Text("Usar Biometria"),
               ),
             ],
           ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/credential.dart';
 import '../services/database_service.dart';
 
 class CredentialFormScreen extends StatefulWidget {
@@ -9,96 +10,135 @@ class CredentialFormScreen extends StatefulWidget {
 }
 
 class _CredentialFormScreenState extends State<CredentialFormScreen> {
-  bool _obscurePassword = true; // Nova variável de estado
-
-  final _noteController = TextEditingController();
-
-  final _formKey =
-      GlobalKey<FormState>(); // Para validar se os campos estão vazios
+  final _formKey = GlobalKey<FormState>();
   final _dbService = DatabaseService();
 
-  // Nossos campos (conforme seu planejamento)
-  String _selectedGroup = 'Social Media';
+  // Controllers para capturar os textos
   final _aliasController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _urlController = TextEditingController();
-  final _secretsController = TextEditingController();
+  final _noteController = TextEditingController();
 
-  // Lista de grupos (podemos expandir depois)
+  String _selectedGroup = 'Others';
+  bool _isSaving = false;
+  bool _obscurePassword = true;
+
   final List<String> _groups = [
-    'Social Media',
-    'Study',
-    'Work',
-    'Banking',
     'Others',
+    'Social Media',
+    'Banking',
+    'Work',
+    'Study',
+    'Streaming',
+    'Shopping',
   ];
 
   void _save() async {
     if (_formKey.currentState!.validate()) {
-      final newEntry = {
-        'alias': _aliasController.text,
-        'group': _selectedGroup,
-        'username': _usernameController.text,
-        'password': _passwordController.text,
-        'note': _noteController.text, // Novo campo
-        'secrets': _secretsController.text,
-        'url': _urlController.text,
-        'createdAt': DateTime.now().toIso8601String(),
-      };
-      await _dbService.saveCredential(newEntry);
-      if (mounted) Navigator.pop(context);
+      setState(() => _isSaving = true);
+
+      try {
+        final newCredential = Credential(
+          alias: _aliasController.text.trim(),
+          group: _selectedGroup,
+          username: _usernameController.text.trim(),
+          password: _passwordController.text,
+          url: _urlController.text.trim(),
+          note: _noteController.text.trim(),
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        // O AWAIT aqui é crucial para garantir que a Box abra
+        // com a chave de criptografia antes de tentar escrever.
+        await _dbService.saveCredential(newCredential);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Credencial salva com sucesso!')),
+          );
+          Navigator.pop(context); // Volta para a Home
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Erro ao Salvar'),
+              content: Text(e.toString()),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          );
+        }
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nova Credencial')),
+      appBar: AppBar(
+        title: const Text('Nova Credencial'),
+        actions: [
+          if (!_isSaving)
+            IconButton(icon: const Icon(Icons.check), onPressed: _save),
+        ],
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              // Seletor de Grupo (Dropdown)
-              DropdownButtonFormField<String>(
-                initialValue: _selectedGroup,
-                decoration: const InputDecoration(
-                  labelText: 'Grupo / Categoria',
-                ),
-                items: _groups
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedGroup = val!),
-              ),
-              const SizedBox(height: 15),
-
+              // Nome / Alias
               TextFormField(
                 controller: _aliasController,
                 decoration: const InputDecoration(
-                  labelText: 'Alias (Identificador)',
-                  border: OutlineInputBorder(),
+                  labelText: 'Nome / Alias (Ex: Gmail)',
+                  prefixIcon: Icon(Icons.label_outline),
                 ),
-                validator: (val) => val!.isEmpty ? 'Campo obrigatório' : null,
+                validator: (v) => v!.isEmpty ? 'Informe um nome' : null,
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 16),
 
+              // Grupo / Categoria
+              DropdownButtonFormField<String>(
+                value: _selectedGroup,
+                decoration: const InputDecoration(
+                  labelText: 'Grupo / Categoria',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+                items: _groups.map((g) {
+                  return DropdownMenuItem(value: g, child: Text(g));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedGroup = val!),
+              ),
+              const SizedBox(height: 16),
+
+              // Usuário
               TextFormField(
                 controller: _usernameController,
                 decoration: const InputDecoration(
-                  labelText: 'Username / E-mail (Opcional)',
-                  border: OutlineInputBorder(),
+                  labelText: 'Usuário / E-mail',
+                  prefixIcon: Icon(Icons.person_outline),
                 ),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 16),
 
+              // Senha
               TextFormField(
                 controller: _passwordController,
-                obscureText: _obscurePassword, // Usa a variável
+                obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Password (Opcional)',
-                  border: const OutlineInputBorder(),
+                  labelText: 'Senha',
+                  prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -109,47 +149,55 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
                         setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
+                // validator: (v) => v!.isEmpty ? 'Informe a senha' : null,
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 16),
 
+              // URL
               TextFormField(
                 controller: _urlController,
                 decoration: const InputDecoration(
-                  labelText: 'URL / Site (Opcional)',
-                  border: OutlineInputBorder(),
+                  labelText: 'URL / Site',
+                  prefixIcon: Icon(Icons.link),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Notas
+              TextFormField(
+                controller: _noteController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Notas / Observações',
+                  prefixIcon: Icon(Icons.notes),
                 ),
               ),
               const SizedBox(height: 30),
 
-              // Campo Note (Opcional)
-              TextFormField(
-                controller: _noteController,
-                maxLines: 3, // Começa com 3 linhas, mas expande
-                decoration: const InputDecoration(
-                  labelText: 'Notes (App, system, info, etc.)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // Campo Secrets (Opcional)
-              TextFormField(
-                controller: _secretsController,
-                maxLines: null, // Expansão infinita para chaves longas
-                decoration: const InputDecoration(
-                  labelText: 'Secrets (Passkeys, extra keys, etc.)',
-                  border: OutlineInputBorder(),
-                  helperText:
-                      'Cole aqui suas chaves de segurança ou segredos extras.',
-                ),
-              ),
-
+              // Botão Salvar
               SizedBox(
                 width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _save,
-                  child: const Text('Salvar Credencial'),
+                height: 55,
+                child: ElevatedButton.icon(
+                  onPressed: _isSaving ? null : _save,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(_isSaving ? 'SALVANDO...' : 'SALVAR CREDENCIAL'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -157,5 +205,15 @@ class _CredentialFormScreenState extends State<CredentialFormScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _aliasController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _urlController.dispose();
+    _noteController.dispose();
+    super.dispose();
   }
 }

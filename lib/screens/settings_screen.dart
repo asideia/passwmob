@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../main.dart'; // Para acessar o themeNotifier
+import '../services/security_service.dart';
+import '../services/database_service.dart';
 import 'change_master_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -10,51 +13,82 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // Removido o _isDarkMode local, pois usamos o themeNotifier global
+  final _securityService = SecurityService();
+  final _dbService = DatabaseService();
+
+  void _showResetDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset de Fábrica'),
+        content: const Text(
+          'Isso apagará TODAS as suas senhas e a senha mestre permanentemente. Esta ação não pode ser desfeita.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCELAR'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _dbService.clearAll();
+              await _securityService.resetAll();
+              if (mounted) {
+                // Reinicia o app do zero
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/setup', (route) => false);
+              }
+            },
+            child: const Text(
+              'APAGAR TUDO',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Detecta se o tema atual é dark para lógica de cores pontuais
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Configurações')),
       body: ListView(
         children: [
-          // Seção: Aparência
-          _buildSectionHeader('Aparência'),
-          SwitchListTile(
-            secondary: Icon(
-              isDark ? Icons.dark_mode : Icons.light_mode,
-              // O ícone agora herda a cor do tema automaticamente
-            ),
-            title: const Text('Modo Escuro'),
-            value: isDark,
-            activeColor: const Color(0xFFB11B1F), // Vermelho do seu logo
-            onChanged: (bool isDarkValue) {
-              // Atualiza o estado global
-              themeNotifier.value = isDarkValue
-                  ? ThemeMode.dark
-                  : ThemeMode.light;
-              // O setState reconstrói este widget para animar o toggle
-              setState(() {});
+          const _SectionHeader(title: 'Aparência'),
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: themeNotifier,
+            builder: (_, ThemeMode currentMode, __) {
+              return ListTile(
+                leading: Icon(
+                  currentMode == ThemeMode.dark
+                      ? Icons.dark_mode
+                      : Icons.light_mode,
+                ),
+                title: const Text('Tema do Aplicativo'),
+                subtitle: Text(
+                  currentMode == ThemeMode.dark ? 'Escuro' : 'Claro',
+                ),
+                trailing: Switch(
+                  value: currentMode == ThemeMode.dark,
+                  onChanged: (isDark) {
+                    themeNotifier.value = isDark
+                        ? ThemeMode.dark
+                        : ThemeMode.light;
+                  },
+                ),
+              );
             },
           ),
 
-          // Divider dinâmico que funciona em ambos os modos
-          Divider(
-            color: isDark ? Colors.white10 : Colors.black12,
-            indent: 16,
-            endIndent: 16,
-          ),
-
-          // Seção: Segurança
-          _buildSectionHeader('Segurança'),
+          const Divider(),
+          const _SectionHeader(title: 'Segurança'),
           ListTile(
-            leading: const Icon(Icons.lock_reset),
-            title: const Text('Alterar Senha Master'),
-            subtitle: const Text('Atualize sua credencial de acesso ao cofre'),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Alterar Senha Mestre'),
+            subtitle: const Text('Trocar a senha de acesso ao cofre'),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () {
               Navigator.push(
                 context,
@@ -65,40 +99,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
 
-          Divider(
-            color: isDark ? Colors.white10 : Colors.black12,
-            indent: 16,
-            endIndent: 16,
+          const Divider(),
+          const _SectionHeader(title: 'Dados e Armazenamento'),
+          ListTile(
+            leading: const Icon(Icons.storage_outlined),
+            title: const Text('Local do Banco'),
+            subtitle: const Text('Memória Interna Criptografada'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            title: const Text(
+              'Limpar Base de Dados',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+            subtitle: const Text('Remove todas as credenciais salvas'),
+            onTap: _showResetDialog,
           ),
 
-          // Seção: Dados (Escopo Futuro)
-          _buildSectionHeader('Dados'),
-          ListTile(
-            leading: const Icon(Icons.ios_share),
-            title: const Text('Exportar Credenciais'),
-            subtitle: const Text('Em breve - Backup criptografado'),
-            enabled: false, // O Flutter já cuida da cor "esmaecida"
-          ),
-          ListTile(
-            leading: const Icon(Icons.file_open_outlined),
-            title: const Text('Importar Dados'),
-            enabled: false,
+          const Divider(),
+          const _SectionHeader(title: 'Sobre'),
+          const ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('PASSWMOB'),
+            subtitle: Text(
+              'Versão 1.0.0-Beta\nDesenvolvido com Flutter & Hive',
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(String title) {
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          color: Color(0xFFB11B1F), // Vermelho Shield do PASSWMOB
+        title,
+        style: TextStyle(
+          color: Theme.of(context).primaryColor,
           fontWeight: FontWeight.bold,
-          fontSize: 12,
-          letterSpacing: 1.1,
+          fontSize: 13,
+          letterSpacing: 1.2,
         ),
       ),
     );

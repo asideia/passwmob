@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/security_service.dart'; // Importando o serviço correto
+import '../services/security_service.dart';
 
 class ChangeMasterPasswordScreen extends StatefulWidget {
   const ChangeMasterPasswordScreen({super.key});
@@ -11,152 +11,164 @@ class ChangeMasterPasswordScreen extends StatefulWidget {
 
 class _ChangeMasterPasswordScreenState
     extends State<ChangeMasterPasswordScreen> {
+  final _securityService = SecurityService();
   final _formKey = GlobalKey<FormState>();
-  final _security = SecurityService();
 
-  // Controllers para validação atual
   final _currentPasswordController = TextEditingController();
-  final _currentSaltController = TextEditingController();
-
-  // Controllers para novos dados
   final _newPasswordController = TextEditingController();
-  final _newSaltController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  bool _obscureText = true;
+  bool _isLoading = false;
+  bool _obscureCurrent = true;
+  bool _obscureNew = true;
 
-  void _updatePassword() async {
-    if (_formKey.currentState!.validate()) {
-      // 1. Buscar os dados que estão atualmente no Secure Storage
-      final storedPassword = await _security.getMasterPassword();
-      final storedSalt = await _security.getSecretSalt();
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
-      // 2. Validar se o que o usuário digitou como "Atual" está correto
-      if (_currentPasswordController.text != storedPassword ||
-          _currentSaltController.text != storedSalt) {
-        _showSnackBar('Senha ou Salt atuais incorretos!', Colors.red);
+  Future<void> _updatePassword() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Validar se a senha atual está correta (comparando hashes no SecurityService)
+      final isCurrentCorrect = await _securityService.authenticate(
+        _currentPasswordController.text,
+      );
+
+      if (!isCurrentCorrect) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('A senha atual está incorreta.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        setState(() => _isLoading = false);
         return;
       }
 
-      // 3. Salvar as novas credenciais
-      await _security.setupFirstAccess(
-        _newPasswordController.text,
-        _newSaltController.text,
-      );
+      // 2. Salvar o novo hash da senha mestre
+      // Como separamos a Master Password da Encryption Key, os dados no Hive
+      // permanecem acessíveis após essa troca.
+      await _securityService.saveMasterPassword(_newPasswordController.text);
 
-      _showSnackBar('Credenciais atualizadas com sucesso!', Colors.green);
-      if (mounted) Navigator.pop(context);
-    }
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
-  }
-
-  // Função auxiliar para os campos de senha
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: _obscureText,
-      decoration: InputDecoration(
-        labelText: label,
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscureText ? Icons.visibility_off : Icons.visibility,
-            color: const Color(0xFFB11B1F),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Senha mestre alterada com sucesso!'),
+            backgroundColor: Colors.green,
           ),
-          onPressed: () => setState(() => _obscureText = !_obscureText),
-        ),
-      ),
-      validator: validator,
-    );
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao atualizar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Usamos o tema do contexto para cores dinâmicas
-    final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Alterar Acesso Master')),
+      appBar: AppBar(title: const Text('Segurança')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Atenção: A alteração da senha e do salt afeta a chave de criptografia do cofre.',
-                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey),
+              const Icon(
+                Icons.security_update_good,
+                size: 64,
+                color: Color(0xFFB11B1F),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Alterar Senha Mestre',
                 textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 8),
+              const Text(
+                'Sua senha mestre é a única forma de acessar seus dados. Se você a alterar, certifique-se de memorizá-la.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 32),
 
-              // SEÇÃO ATUAL
-              _buildSectionTitle('CONFIRMAÇÃO ATUAL'),
               _buildPasswordField(
+                label: 'Senha Atual',
                 controller: _currentPasswordController,
-                label: 'Senha Master Atual',
-                validator: (v) => v!.isEmpty ? 'Obrigatório' : null,
+                obscure: _obscureCurrent,
+                onToggle: () =>
+                    setState(() => _obscureCurrent = !_obscureCurrent),
               ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _currentSaltController,
-                decoration: const InputDecoration(labelText: 'Salt Atual'),
-                validator: (v) => v!.isEmpty ? 'Obrigatório' : null,
-              ),
+              const SizedBox(height: 20),
 
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Divider(),
-              ),
-
-              // SEÇÃO NOVA
-              _buildSectionTitle('NOVAS CREDENCIAIS'),
               _buildPasswordField(
+                label: 'Nova Senha Mestre',
                 controller: _newPasswordController,
-                label: 'Nova Senha Master',
-                validator: (v) =>
-                    v!.length < 6 ? 'Mínimo de 6 caracteres' : null,
+                obscure: _obscureNew,
+                onToggle: () => setState(() => _obscureNew = !_obscureNew),
+                validator: (v) {
+                  if (v == null || v.length < 8)
+                    return 'A senha deve ter pelo menos 8 caracteres';
+                  return null;
+                },
               ),
-              const SizedBox(height: 10),
-              _buildPasswordField(
-                controller: _confirmPasswordController,
-                label: 'Confirme a Nova Senha',
-                validator: (v) => v != _newPasswordController.text
-                    ? 'As senhas não coincidem'
-                    : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _newSaltController,
-                decoration: const InputDecoration(labelText: 'Novo Salt'),
-                validator: (v) => v!.isEmpty ? 'Obrigatório' : null,
-              ),
+              const SizedBox(height: 20),
 
+              _buildPasswordField(
+                label: 'Confirmar Nova Senha',
+                controller: _confirmPasswordController,
+                obscure: true, // Sempre oculto
+                validator: (v) {
+                  if (v != _newPasswordController.text)
+                    return 'As senhas não coincidem';
+                  return null;
+                },
+              ),
               const SizedBox(height: 40),
 
               ElevatedButton(
-                onPressed: _updatePassword,
+                onPressed: _isLoading ? null : _updatePassword,
                 style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: const Color(0xFFB11B1F),
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'ATUALIZAR ACESSO',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'CONFIRMAR ALTERAÇÃO',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
               ),
             ],
           ),
@@ -165,16 +177,26 @@ class _ChangeMasterPasswordScreenState
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFFB11B1F),
-        ),
+  Widget _buildPasswordField({
+    required String label,
+    required TextEditingController controller,
+    required bool obscure,
+    VoidCallback? onToggle,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      validator: validator ?? (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: const Icon(Icons.lock_outline),
+        suffixIcon: onToggle != null
+            ? IconButton(
+                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                onPressed: onToggle,
+              )
+            : null,
       ),
     );
   }

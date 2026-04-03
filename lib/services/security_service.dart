@@ -1,53 +1,64 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math'; // Necessário para Random.secure()
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:pointycastle/export.dart'; // O 'encrypt' usa este por baixo dos panos
+import 'package:crypto/crypto.dart';
 
 class SecurityService {
-  // O "cofre" seguro do sistema (iOS Keychain / Android Keystore)
   final _storage = const FlutterSecureStorage();
 
-  // Chaves para identificar os dados guardados
-  static const _masterKeyName = 'master_password';
-  static const _saltKeyName = 'secret_salt';
+  static const String _masterPasswordKey = 'master_password';
+  static const String _encryptionKeyName = 'hive_encryption_key';
 
-  // Salva a configuração inicial
-  Future<void> setupFirstAccess(String password, String salt) async {
-    await _storage.write(key: _masterKeyName, value: password);
-    await _storage.write(key: _saltKeyName, value: salt);
-  }
-
-  // Verifica se o usuário já configurou o app antes
+  /// Verifica se é o primeiro acesso
   Future<bool> isFirstAccess() async {
-    String? master = await _storage.read(key: _masterKeyName);
-    return master == null;
+    String? password = await _storage.read(key: _masterPasswordKey);
+    return password == null;
   }
 
-  // A MÁGICA: Transforma senha + salt em uma chave AES de 32 bytes (256 bits)
-  Future<Uint8List> generateEncryptionKey() async {
-    String? password = await _storage.read(key: _masterKeyName);
-    String? salt = await _storage.read(key: _saltKeyName);
+  /// Método solicitado pelo seu setup_screen.dart
+  Future<void> setupFirstAccess(String password) async {
+    await saveMasterPassword(password);
+    await generateEncryptionKey(); // Já deixa a chave de criptografia pronta
+  }
 
-    if (password == null || salt == null) {
-      throw Exception("Chaves não configuradas");
+  /// Salva o hash da senha mestre
+  Future<void> saveMasterPassword(String password) async {
+    final bytes = utf8.encode(password);
+    final hash = sha256.convert(bytes).toString();
+    await _storage.write(key: _masterPasswordKey, value: hash);
+  }
+
+  /// Autentica o usuário (usado pelo login_screen.dart)
+  Future<bool> authenticate(String password) async {
+    final storedHash = await _storage.read(key: _masterPasswordKey);
+    if (storedHash == null) return false;
+
+    final inputBytes = utf8.encode(password);
+    final inputHash = sha256.convert(inputBytes).toString();
+    return storedHash == inputHash;
+  }
+
+  /// Gera ou recupera a chave de 64 bytes para o Hive
+  Future<List<int>> generateEncryptionKey() async {
+    String? keyBase64 = await _storage.read(key: _encryptionKeyName);
+
+    if (keyBase64 == null) {
+      // Correção do erro .shuffle(): Gerando 64 bytes aleatórios reais
+      final random = Random.secure();
+      final key = List<int>.generate(64, (_) => random.nextInt(256));
+
+      await _storage.write(
+        key: _encryptionKeyName,
+        value: base64UrlEncode(key),
+      );
+      return key;
     }
 
-    // Convertemos strings para bytes (Uint8List) antes de processar
-    final passwordBytes = utf8.encode(password);
-    final saltBytes = utf8.encode(salt);
-
-    // PBKDF2: "Estica" a senha 10.000 vezes para torná-la forte
-    final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
-      ..init(Pbkdf2Parameters(Uint8List.fromList(saltBytes), 10000, 32));
-
-    return derivator.process(Uint8List.fromList(passwordBytes));
+    return base64Url.decode(keyBase64);
   }
 
-  Future<String?> getMasterPassword() async {
-    return await _storage.read(key: _masterKeyName);
-  }
-
-  Future<String?> getSecretSalt() async {
-    return await _storage.read(key: _saltKeyName);
+  /// Apaga tudo (Reset)
+  Future<void> resetAll() async {
+    await _storage.deleteAll();
   }
 }

@@ -1,7 +1,9 @@
+import 'dart:async'; // Adicionado para o Timer
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-// Importando seus novos arquivos (ajuste o caminho se necessário)
+// Importando o Model e os serviços
+import 'models/credential.dart';
 import 'screens/credential_details_screen.dart';
 import 'screens/credential_form_screen.dart';
 import 'screens/setup_screen.dart';
@@ -9,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/security_service.dart';
 import 'services/database_service.dart';
+import 'services/otp_service.dart';
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 
@@ -16,13 +19,8 @@ ThemeData _buildPasswMobTheme({required bool isDark}) {
   return ThemeData(
     useMaterial3: true,
     brightness: isDark ? Brightness.dark : Brightness.light,
-
-    // Vermelho Shield Red do seu logo
     primaryColor: const Color(0xFFB11B1F),
-
-    // Cores de Fundo
     scaffoldBackgroundColor: isDark ? Colors.black : Colors.white,
-
     colorScheme: ColorScheme.fromSeed(
       seedColor: const Color(0xFFB11B1F),
       brightness: isDark ? Brightness.dark : Brightness.light,
@@ -30,20 +28,15 @@ ThemeData _buildPasswMobTheme({required bool isDark}) {
       surface: isDark ? const Color(0xFF121212) : Colors.grey[100],
       secondary: const Color(0xFFB11B1F),
     ),
-
     appBarTheme: AppBarTheme(
       backgroundColor: isDark ? Colors.black : Colors.white,
       foregroundColor: isDark ? Colors.white : Colors.black,
       elevation: 0,
       centerTitle: true,
     ),
-
-    // Mantém o estilo dos Inputs coerente
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: isDark ? const Color(0xFF1E1E1E) : Colors.grey[200],
-      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
-      prefixIconColor: const Color(0xFFB11B1F),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
@@ -52,7 +45,6 @@ ThemeData _buildPasswMobTheme({required bool isDark}) {
   );
 }
 
-// Mude de Widget para IconData
 IconData _getGroupIconData(String group) {
   switch (group) {
     case 'Social Media':
@@ -69,63 +61,62 @@ IconData _getGroupIconData(String group) {
 }
 
 void main() async {
-  // 1. Garante que os plugins do sistema estejam prontos
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Inicializa o Hive
+  // 1. Inicializa o Hive
   await Hive.initFlutter();
+
+  // 2. REGISTRA O ADAPTER
+  if (!Hive.isAdapterRegistered(0)) {
+    Hive.registerAdapter(CredentialAdapter());
+  }
 
   final security = SecurityService();
   bool isFirst = await security.isFirstAccess();
 
-  // Só tentamos abrir a box com chave se NÃO for o primeiro acesso
+  // 3. Abre a Box principal com tratamento de erro robusto
+  const String boxName = 'passwords';
+
   if (!isFirst) {
     try {
       final encryptionKey = await security.generateEncryptionKey();
 
-      // Abrimos a box usando a chave gerada!
-      // Agora o Hive salva tudo criptografado automaticamente no disco.
-      await Hive.openBox(
-        'passwords',
-        encryptionCipher: HiveAesCipher(encryptionKey),
-      );
+      // Só abre se não estiver aberta para evitar conflitos
+      if (!Hive.isBoxOpen(boxName)) {
+        await Hive.openBox<Credential>(
+          boxName,
+          encryptionCipher: HiveAesCipher(encryptionKey),
+        );
+      }
     } catch (e) {
-      print("Erro ao abrir banco criptografado: $e");
+      debugPrint("Erro fatal ao abrir banco criptografado: $e");
+      // Se a chave falhar, abrimos uma box vazia ou forçamos re-autenticação
     }
   } else {
-    // Se for o primeiro acesso, abrimos sem chave apenas para não dar erro,
-    // ou deixamos para abrir após o setup.
-    await Hive.openBox('passwords');
+    if (!Hive.isBoxOpen(boxName)) {
+      await Hive.openBox<Credential>(boxName);
+    }
   }
 
-  // Inicia o App passando a informação do primeiro acesso
   runApp(PasswMobApp(isFirstAccess: isFirst));
 }
 
 class PasswMobApp extends StatelessWidget {
   final bool isFirstAccess;
-
   const PasswMobApp({super.key, required this.isFirstAccess});
 
   @override
   Widget build(BuildContext context) {
-    // 2. O Builder "escuta" o themeNotifier
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
           title: 'PASSWMOB',
           debugShowCheckedModeBanner: false,
-
-          // 3. Define qual tema usar baseado no themeNotifier
           themeMode: currentMode,
-
-          // Tema Claro (Light)
           theme: _buildPasswMobTheme(isDark: false),
-
-          // Tema Escuro (Dark)
           darkTheme: _buildPasswMobTheme(isDark: true),
-
+          // Se for o primeiro acesso, vai para o Setup, senão Login
           initialRoute: isFirstAccess ? '/setup' : '/login',
           routes: {
             '/setup': (context) => const SetupScreen(),
@@ -148,7 +139,20 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _dbService = DatabaseService();
-  String _searchQuery = ""; // Para o campo de busca
+  late Future<List<Credential>> _credentialsFuture;
+  String _searchQuery = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _credentialsFuture = _dbService.getAllCredentials();
+  }
+
+  void _refreshData() {
+    setState(() {
+      _credentialsFuture = _dbService.getAllCredentials();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,12 +162,10 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              );
-            },
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            ),
           ),
         ],
         bottom: PreferredSize(
@@ -177,27 +179,8 @@ class _HomePageState extends State<HomePage> {
                     : Colors.black,
               ),
               decoration: InputDecoration(
-                hintText: 'Filtrar por nome, nota, user ou grupo...',
-                hintStyle: TextStyle(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white54
-                      : Colors.black54,
-                ),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: const Color(
-                    0xFFB11B1F,
-                  ), // Mantém o vermelho do logo como destaque
-                ),
-                // A mágica acontece aqui:
-                filled: true,
-                fillColor: Theme.of(context).brightness == Brightness.dark
-                    ? const Color(0xFF1E1E1E) // Cinza escuro no Dark
-                    : Colors.grey[200], // Cinza claro no Light
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
+                hintText: 'Filtrar por nome, nota ou grupo...',
+                prefixIcon: const Icon(Icons.search, color: Color(0xFFB11B1F)),
               ),
               onChanged: (value) =>
                   setState(() => _searchQuery = value.toLowerCase()),
@@ -205,26 +188,27 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-      body: FutureBuilder<List<Map>>(
-        future: _dbService.getAllCredentials(),
+      body: FutureBuilder<List<Credential>>(
+        future: _credentialsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Erro ao carregar: ${snapshot.error}'));
           }
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('Nenhuma senha salva.'));
           }
 
-          // --- LOGICA DE FILTRO E ORDENAÇÃO ---
-          var list = snapshot.data!;
-
-          // 1. Filtro (Alias, Notes, Username e Group)
-          var filtered = list.where((item) {
-            final alias = (item['alias'] ?? '').toString().toLowerCase();
-            final note = (item['note'] ?? '').toString().toLowerCase();
-            final user = (item['username'] ?? '').toString().toLowerCase();
-            final group = (item['group'] ?? '').toString().toLowerCase();
+          final fullList = snapshot.data!;
+          final filtered = fullList.where((item) {
+            final alias = item.alias.toLowerCase();
+            final note = (item.note ?? '').toLowerCase();
+            final user = (item.username ?? '').toLowerCase();
+            final group = item.group.toLowerCase();
 
             return alias.contains(_searchQuery) ||
                 note.contains(_searchQuery) ||
@@ -232,16 +216,11 @@ class _HomePageState extends State<HomePage> {
                 group.contains(_searchQuery);
           }).toList();
 
-          // 2. Ordenação por Alias (A-Z)
-          filtered.sort(
-            (a, b) => (a['alias'] ?? '').compareTo(b['alias'] ?? ''),
-          );
+          filtered.sort((a, b) => a.alias.compareTo(b.alias));
 
-          // 3. Agrupamento por Categoria
-          Map<String, List<Map>> grouped = {};
+          Map<String, List<Credential>> grouped = {};
           for (var item in filtered) {
-            String category = item['group'] ?? 'Others';
-            grouped.putIfAbsent(category, () => []).add(item);
+            grouped.putIfAbsent(item.group, () => []).add(item);
           }
 
           final categories = grouped.keys.toList()..sort();
@@ -255,74 +234,58 @@ class _HomePageState extends State<HomePage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cabeçalho do Grupo
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 12.0,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Text(
                       category.toUpperCase(),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.white, // Alterado de azul para branco
-                        letterSpacing:
-                            1.2, // Um toque extra de design para títulos
-                        fontSize: 13,
+                        color: Color(0xFFB11B1F),
+                        fontSize: 12,
+                        letterSpacing: 1.1,
                       ),
                     ),
                   ),
-                  // Itens do Grupo
                   ...items.map((item) {
-                    // Precisamos achar o index original para editar/excluir corretamente
-                    int originalIndex = list.indexOf(item);
+                    int originalIndex = fullList.indexOf(item);
+                    bool hasOtp =
+                        item.twoFactorSecret != null &&
+                        item.twoFactorSecret!.isNotEmpty;
 
                     return Card(
                       margin: const EdgeInsets.symmetric(
-                        horizontal: 10,
+                        horizontal: 12,
                         vertical: 4,
                       ),
-                      color: const Color(
-                        0xFF121212,
-                      ), // Fundo do card cinza muito escuro
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.white.withOpacity(0.05),
-                        ), // Borda sutil
-                      ),
+                      color: const Color(0xFF1E1E1E),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: Colors.white.withOpacity(
-                            0.1,
-                          ), // Fundo cinza translúcido
+                          backgroundColor: Colors.white10,
                           child: Icon(
                             _getGroupIconData(category),
-                            color: Colors.white, // Ícone agora é Branco
+                            color: Colors.white,
                             size: 20,
                           ),
                         ),
                         title: Text(
-                          item['alias'] ?? '',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
+                          item.alias,
+                          style: const TextStyle(color: Colors.white),
                         ),
                         subtitle: Text(
-                          item['username'] ?? '',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                          ), // Subtítulo discreto
+                          item.username ?? '',
+                          style: const TextStyle(color: Colors.white54),
                         ),
-                        trailing: Icon(
-                          Icons.arrow_forward_ios,
-                          size: 12,
-                          color: Colors.white.withOpacity(
-                            0.2,
-                          ), // Seta quase invisível
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (hasOtp)
+                              _OtpDisplay(secret: item.twoFactorSecret!),
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Colors.white24,
+                            ),
+                          ],
                         ),
                         onTap: () async {
                           await Navigator.push(
@@ -334,7 +297,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                           );
-                          setState(() {});
+                          _refreshData();
                         },
                       ),
                     );
@@ -348,10 +311,67 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           await Navigator.pushNamed(context, '/add');
-          setState(() {});
+          _refreshData();
         },
+        backgroundColor: const Color(0xFFB11B1F),
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
+    );
+  }
+}
+
+/// Widget isolado para exibir o código 2FA que se atualiza sozinho a cada segundo.
+class _OtpDisplay extends StatefulWidget {
+  final String secret;
+  const _OtpDisplay({required this.secret});
+
+  @override
+  State<_OtpDisplay> createState() => _OtpDisplayState();
+}
+
+class _OtpDisplayState extends State<_OtpDisplay> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _formatOtp(String code) {
+    if (code.length != 6) return code;
+    return "${code.substring(0, 3)} ${code.substring(3, 6)}";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          _formatOtp(OtpService.generateCode(widget.secret)),
+          style: const TextStyle(
+            color: Color(0xFFB11B1F),
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            fontFamily: 'monospace',
+          ),
+        ),
+        Text(
+          'expira em ${OtpService.getSecondsRemaining()}s',
+          style: const TextStyle(color: Colors.white24, fontSize: 10),
+        ),
+      ],
     );
   }
 }
