@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:passwmob/screens/qr_scanner_screen.dart';
 import '../models/credential.dart';
 import '../services/database_service.dart';
@@ -29,6 +30,9 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
   late TextEditingController _urlController;
   late TextEditingController _noteController;
   late String _selectedGroup;
+
+  // Controla se a tela está em modo de edição ou visualização
+  bool _isEditing = false;
 
   // Variável para controlar a visibilidade da senha
   bool _obscurePassword = true;
@@ -163,13 +167,38 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalhes'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.red),
-            onPressed: _confirmDelete,
-          ),
-          IconButton(icon: const Icon(Icons.check), onPressed: _saveChanges),
-        ],
+        actions: _isEditing
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => setState(() {
+                    _isEditing = false;
+                    // Reverte os campos para os valores originais
+                    _aliasController.text = widget.item.alias;
+                    _usernameController.text = widget.item.username ?? '';
+                    _passwordController.text = widget.item.password ?? '';
+                    _urlController.text = widget.item.url ?? '';
+                    _noteController.text = widget.item.note ?? '';
+                    _selectedGroup = widget.item.group;
+                    _current2FASecret = widget.item.twoFactorSecret;
+                    _current2FALabel = widget.item.twoFactorLabel;
+                  }),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check),
+                  onPressed: _saveChanges,
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: _confirmDelete,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => setState(() => _isEditing = true),
+                ),
+              ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -235,12 +264,15 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
                   leading: const Icon(Icons.vibration),
                   title: Text(_current2FALabel ?? "Código 2FA Ativo"),
                   subtitle: const Text("Configurado"),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    onPressed: () => setState(() => _current2FASecret = null),
-                  ),
+                  trailing: _isEditing
+                      ? IconButton(
+                          icon: const Icon(Icons.close, color: Colors.red),
+                          onPressed: () =>
+                              setState(() => _current2FASecret = null),
+                        )
+                      : null,
                 )
-              else
+              else if (_isEditing)
                 Row(
                   children: [
                     Expanded(
@@ -302,6 +334,17 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
     bool isRequired = false,
     int maxLines = 1,
   }) {
+    // Function to copy text to clipboard
+    void copyToClipboard() {
+      Clipboard.setData(ClipboardData(text: controller.text));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$label copiado!')));
+    }
+
+    // Determine the onTap behavior for the TextFormField
+    final VoidCallback? onTapCallback = _isEditing ? null : copyToClipboard;
+
     return TextFormField(
       controller: controller,
       // obscureText: isPassword,
@@ -315,24 +358,44 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
+        // The border is already defined in the theme, but can be overridden here
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         // Adiciona o ícone do olhinho apenas se for campo de senha
-        suffixIcon: isPassword
-            ? IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
-                  color: Colors.grey,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-              )
-            : null,
+        suffixIcon: _isEditing
+            ? (isPassword
+                  ? IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    )
+                  : null)
+            : (isPassword // If not editing, and it's a password field
+                  ? IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    )
+                  : null), // If not editing and not a password, no suffix icon (copy on tap of field)
       ),
-      // validator: (value) =>
-      //     value == null || value.isEmpty ? 'Obrigatório' : null,
+      readOnly: !_isEditing, // Ensure read-only when not editing
+      canRequestFocus: _isEditing, // Prevent focus when not editing
+      onTap: onTapCallback, // Handle tap for copying when not editing
       validator: (value) {
         if (isRequired && (value == null || value.isEmpty)) {
           return 'Obrigatório';
@@ -354,7 +417,9 @@ class _CredentialDetailsScreenState extends State<CredentialDetailsScreen> {
       items: groups
           .map((g) => DropdownMenuItem(value: g, child: Text(g)))
           .toList(),
-      onChanged: (value) => setState(() => _selectedGroup = value!),
+      onChanged: _isEditing
+          ? (value) => setState(() => _selectedGroup = value!)
+          : null,
     );
   }
 }
