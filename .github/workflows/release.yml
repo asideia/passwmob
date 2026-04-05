@@ -1,0 +1,51 @@
+name: Gerar Release (Android & iOS)
+
+on:
+  push:
+    tags:
+      - 'v*' # Dispara quando você criar uma tag tipo v1.0.0
+
+jobs:
+  build:
+    runs-on: macos-latest # Precisamos de Mac para o iOS
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Instalar dependências
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      # Decodificando a chave de assinatura do Android
+      - name: Preparar Assinatura Android
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+      - name: Build APK (Android)
+        run: |
+          flutter build apk --release \
+            --dart-define=MY_APP_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        # Nota: Você precisará ajustar seu build.gradle para ler essas variáveis
+
+      - name: Build iOS (Apenas checagem)
+        run: flutter build ios --release --no-codesign
+
+      - name: Criar Release e Upload dos Arquivos
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
