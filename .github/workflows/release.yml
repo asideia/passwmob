@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*' # Dispara quando você criar uma tag tipo v1.0.0
 
+permissions:
+  contents: write  # Add this to grant write access to repository contents
+
 jobs:
   build:
     runs-on: macos-latest # Precisamos de Mac para o iOS
