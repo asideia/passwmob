@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../main.dart'; // Para acessar o themeNotifier
 import '../services/security_service.dart';
 import '../services/database_service.dart';
+import '../services/file_service.dart';
 import 'change_master_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,6 +15,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _securityService = SecurityService();
   final _dbService = DatabaseService();
+  final _fileService = FileService();
 
   void _showResetDialog() {
     showDialog(
@@ -48,6 +49,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  void _importData() async {
+    try {
+      final count = await _fileService.importCredentialsFromCsv();
+      if (mounted) {
+        if (count > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$count credenciais importadas!')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Nenhum dado importado.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _exportData() async {
+    try {
+      final path = await _fileService.exportCredentialsToCsv();
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Arquivo salvo em: $path')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao exportar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -114,6 +158,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             subtitle: const Text('Remove todas as credenciais salvas'),
             onTap: _showResetDialog,
+          ),
+          ListTile(
+            leading: const Icon(Icons.upload_file),
+            title: const Text(
+              'Importar CSV',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+            subtitle: const Text('Adicionar credenciais em massa'),
+            onTap: _importData,
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_for_offline_outlined),
+            title: const Text(
+              'Exportar CSV',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+            subtitle: const Text('Backup local das suas senhas'),
+            onTap: _exportData,
           ),
 
           const Divider(),
