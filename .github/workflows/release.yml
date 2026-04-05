@@ -35,10 +35,11 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
 
       - name: Build APK (Android)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          flutter build apk --release \
-            --dart-define=MY_APP_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        # Nota: Você precisará ajustar seu build.gradle para ler essas variáveis
+          flutter build apk --release
 
       - name: Build iOS (Apenas checagem)
         run: flutter build ios --release --no-codesign

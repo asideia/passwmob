@@ -16,10 +16,16 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 } else {
     // Caso não exista o arquivo (ex: no GitHub Actions), tenta ler das variáveis de ambiente
-    keystoreProperties["storePassword"] = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    keystoreProperties["keyPassword"] = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    keystoreProperties["keyAlias"] = System.getenv("ANDROID_KEY_ALIAS")
-    keystoreProperties["storeFile"] = "upload-keystore.jks"
+    val storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val keyPassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    val keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+    
+    if (!storePassword.isNullOrEmpty() && !keyPassword.isNullOrEmpty() && !keyAlias.isNullOrEmpty()) {
+        keystoreProperties["storePassword"] = storePassword
+        keystoreProperties["keyPassword"] = keyPassword
+        keystoreProperties["keyAlias"] = keyAlias
+        keystoreProperties["storeFile"] = "upload-keystore.jks"
+    }
 }
 
 android {
