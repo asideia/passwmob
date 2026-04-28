@@ -184,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: Icon(Icons.info_outline),
             title: Text('PASSWMOB'),
             subtitle: Text(
-              'Versão 1.0.0-Beta\nDesenvolvido com Flutter & Hive',
+              'Versão 1.0.0-Beta\nDesenvolvido com ❤︎ por AsIdeia.',
             ),
           ),
         ],
