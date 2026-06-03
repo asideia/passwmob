@@ -1,91 +1,78 @@
 # PASSWMOB 🔐
 
-**Gerenciador de Credenciais e 2FA Offline**
+**Gerenciador de Credenciais e Autenticador 2FA 100% Offline**
 
-O **PASSWMOB** é um cofre de senhas seguro, moderno e totalmente offline, desenvolvido em Flutter. Ele foi projetado para usuários que priorizam a soberania dos dados, mantendo todas as informações sensíveis criptografadas exclusivamente no dispositivo, sem dependência de nuvens de terceiros.
+O **PASSWMOB** é um cofre de segurança moderno desenvolvido em Flutter, projetado especificamente para usuários que priorizam a **soberania absoluta de seus dados digitais**. O aplicativo opera sob a filosofia de *Zero-Knowledge* (Conhecimento Zero), mantendo todas as suas credenciais e tokens MFA encriptados localmente no dispositivo, sem qualquer dependência ou tráfego de dados com servidores de terceiros ou serviços em nuvem.
 
------
+---
 
-## 🚀 Funcionalidades
+## 🚀 Funcionalidades Principais
 
-  * **Cofre Criptografado:** Armazenamento local utilizando **Hive** com criptografia **AES-256**.
-  * **Autenticação 2FA (TOTP):** Gerador de códigos de verificação em duas etapas integrado (substituto para Google Authenticator).
-  * **Segurança Biométrica:** Acesso protegido por biometria ou senha do dispositivo.
-  * **Interface Adaptável:** Suporte completo a **Dark Mode** e design responsivo.
-  * **Organização por Grupos:** Categorize suas senhas (Banking, Social Media, Work, etc).
-  * **Importação/Exportação:** Backup e restauração via arquivos CSV seguindo um padrão rigoroso de segurança.
-  * **Privacidade Total:** Apenas o campo *Alias* é obrigatório. Usuário, senha e notas são opcionais.
+* **Cofre Altamente Criptografado:** Persistência de dados local de alta performance através do banco NoSQL **Hive**, envelopado por uma camada de criptografia simétrica robusta **AES-256**.
+* **Módulo TOTP Integrado:** Gerador nativo de códigos de autenticação multifator (2FA) de 6 dígitos que mudam dinamicamente a cada 30 segundos (substituto ideal para o Google Authenticator / Authy).
+* **Autenticação Biométrica Flawless:** Acesso instantâneo e protegido integrado às APIs nativas do sistema operacional móvel (`Fingerprint` ou `FaceID`) via hardware seguro.
+* **Privacidade Granular (Minimalista):** Alinhado com o princípio de minimização de dados, apenas o campo *Alias* (nome de identificação) é obrigatório. Campos de usuário, senha e notas adicionais são opcionais.
+* **Agrupamento Dinâmico:** Organize suas chaves e acessos por categorias lógicas customizáveis (ex: *Banking*, *Social Media*, *Work*, *Personal*).
+* **Backup & Restauração Descentralizados:** Importação e exportação de dados via arquivos estruturados estruturados sob validação rígida.
 
------
+---
 
-## 🛠️ Tecnologias Utilizadas
+## 🛡️ Engenharia de Segurança
 
-  * **Framework:** [Flutter](https://flutter.dev) (v3.x)
-  * **Banco de Dados:** [Hive](https://www.google.com/search?q=https://pub.dev/packages/hive) (NoSQL local rápido)
-  * **Segurança:** \* `flutter_secure_storage` para chaves de criptografia.
-      * `local_auth` para biometria.
-      * `otp` para geração de tokens 2FA.
-  * **Arquitetura:** Service-oriented architecture com gerenciamento de estado nativo.
+O design do ecossistema PASSWMOB apoia-se em camadas integradas ao hardware do dispositivo do usuário:
 
------
+1. **Armazenamento Isolado de Chaves:** A chave simétrica que decifra o banco de dados nunca reside em arquivos comuns de sistema; ela é gerada e trancada dentro da área criptográfica de hardware do aparelho (**Android Keystore** ou **iOS Keychain**).
+2. **Prevenção de Engenharia Reversa:** O arquivo físico `.hive` de banco de dados gravado no sandbox privado do sistema operacional permanece um bloco binário indecifrável em caso de extração ou cópia maliciosa do armazenamento do celular.
+3. **Isolamento de Rede:** O aplicativo **não possui a permissão de tráfego de internet habilitada** em seus manifestos nativos, eliminando completamente qualquer vetor de vazamento de dados (*data exfiltration*).
 
-## 📥 Instalação (Desenvolvimento)
+---
 
-### Pré-requisitos
+## 🛠️ Tecnologias e Dependências
 
-  * Flutter SDK instalado.
-  * Android Studio / VS Code configurado.
+* **Core Framework:** [Flutter](https://flutter.dev) (v3.x)
+* **NoSQL Engine:** [Hive](https://pub.dev/packages/hive) com suporte a cifras `HiveAesCipher`.
+* **Hardware Intermediators:** `flutter_secure_storage` (Keystore/Keychain) e `local_auth` (Segurança Biométrica).
+* **Cryptographic Services:** `pointycastle`, `encrypt`, `crypto` e `otp`.
 
-### Passo a passo
+---
 
-1.  Clone o repositório:
-    ```bash
-    git clone https://github.com/seu-usuario/passwmob.git
-    ```
-2.  Instale as dependências:
-    ```bash
-    flutter pub get
-    ```
-3.  Gere os adaptadores do Hive:
-    ```bash
-    dart run build_runner build --delete-conflicting-outputs
-    ```
-4.  Execute o app:
-    ```bash
-    flutter run
-    ```
+## 📚 Documentação Técnica e Guias
 
------
+Toda a base de conhecimento, especificações de dados e processos do projeto foram modularizados e indexados na pasta `/docs`. Consulte os links abaixo para guias aprofundados:
 
-## 📂 Estrutura de Arquivos
+1. [**`1-how-it-works.md`**](./docs/1-how-it-works.md): Mapeamento conceitual e fluxograma da jornada da informação (Inicialização, Salvamento e Geração TOTP).
+2. [**`2-setup-guide.md`**](./docs/2-setup-guide.md): Guia de provisionamento de SDKs e configuração do ambiente local em arquitetura multi-discos.
+3. [**`3-workflow-guide.md`**](./docs/3-workflow-guide.md): Ciclo de trabalho de engenharia de software diário, tags de versão e publicação via GitHub Actions.
+4. [**`4-data-dictionary.md`**](./docs/4-data-dictionary.md): Dicionário de dados, especificação técnica de atributos e regras de evolução de esquemas NoSQL.
+5. [**`5-troubleshooting.md`**](./docs/5-troubleshooting.md): Diagnóstico e resolução rápida de anomalias no ambiente de compilação, Gradle e Java.
 
-```text
-lib/
-├── models/         # Definição do objeto Credential e Hive Adapters
-├── screens/        # UI (Home, Form, Details, Setup, Login)
-├── services/       # Lógica de negócio (Database, Security, OTP)
-└── main.dart       # Inicialização e Gerenciamento de Temas
+---
+
+## 📥 Como Rodar o Projeto Localmente (Quickstart)
+
+```powershell
+# 1. Clone o repositório
+git clone [https://github.com/asideia/passwmob.git](https://github.com/asideia/passwmob.git)
+
+# 2. Navegue até a pasta do projeto
+cd passwmob
+
+# 3. Baixe as dependências do ecossistema Flutter
+flutter pub get
+
+# 4. Gere os adaptadores de dados estáticos do Hive
+dart run build_runner build --delete-conflicting-outputs
+
+# 5. Execute o aplicativo no seu dispositivo conectado
+flutter run
+
 ```
 
------
+---
 
-## 🔒 Segurança de Dados
+## 🤝 Contribuição e Comunidade
 
-O PASSWMOB segue o princípio de **Zero-Knowledge**:
+O PASSWMOB é um software de código aberto distribuído sob a licença **MIT**. Contribuições voltadas à otimização de UI/UX, revisões de criptografia ou correções de bugs são extremamente bem-vindas. Antes de submeter código, leia o nosso arquivo [`CONTRIBUTING.md`](https://www.google.com/search?q=./CONTRIBUTING.md).
 
-1.  Sua **Master Password** nunca é salva em texto puro; ela gera uma chave derivada via SHA-256.
-2.  A chave de criptografia do banco de dados é armazenada no **Keystore/Keychain** do sistema operacional.
-3.  O arquivo `.hive` é ilegível se extraído do dispositivo sem a chave de segurança.
-
------
-
-## 📄 Licença
-
-Distribuído sob a licença MIT. Veja `LICENSE` para [mais informações](https://github.com/asideia/passwmob/blob/main/LICENSE).
-
------
-
-## 📧 Contato
-
-ThazSobral - [Github](https://github.com/thazsobral)
-Link do Projeto: [Github](https://github.com/asideia/passwmob)
+* **Desenvolvedor Principal:** [ThazSobral](https://github.com/thazsobral)
+* **Organização:** [asideia](https://www.google.com/search?q=https://github.com/asideia)
