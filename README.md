@@ -75,4 +75,4 @@ flutter run
 O PASSWMOB é um software de código aberto distribuído sob a licença **MIT**. Contribuições voltadas à otimização de UI/UX, revisões de criptografia ou correções de bugs são extremamente bem-vindas. Antes de submeter código, leia o nosso arquivo [`CONTRIBUTING.md`](https://github.com/asideia/passwmob/blob/main/CONTRIBUTING.md).
 
 * Criado por [ThazSobral](https://github.com/thazsobral)
-* **Organização:** [AsIdeia](https://www.google.com/search?q=https://github.com/asideia)
+* **Organização:** [AsIdeia](https://github.com/asideia)
